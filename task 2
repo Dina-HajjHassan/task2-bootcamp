@@ -1,0 +1,244 @@
+from flask import Flask, jsonify, request
+from pymongo import MongoClient
+import datetime
+
+app = Flask(__name__)
+
+# Connect to MongoDB
+client = MongoClient("mongodb://localhost:27017/")
+db = client["almayadeen"]
+collection = db["articles"]
+
+@app.route('/top_keywords', methods=['GET'])
+def top_keywords():
+    """Returns the top 10 most frequently used keywords."""
+    pipeline = [
+        {"$unwind": "$keywords"},
+        {"$group": {"_id": "$keywords", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/top_authors', methods=['GET'])
+def top_authors():
+    """Returns the top 10 authors by number of articles."""
+    pipeline = [
+        {"$group": {"_id": "$author", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_date', methods=['GET'])
+def articles_by_date():
+    """Returns the number of articles published on each date."""
+    pipeline = [
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$publication_date"}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_word_count', methods=['GET'])
+def articles_by_word_count():
+    """Returns articles grouped by word count."""
+    pipeline = [
+        {"$group": {"_id": "$word_count", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_language', methods=['GET'])
+def articles_by_language():
+    """Returns the number of articles in each language."""
+    pipeline = [
+        {"$group": {"_id": "$lang", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_classes', methods=['GET'])
+def articles_by_classes():
+    """Returns the number of articles in each class."""
+    pipeline = [
+        {"$unwind": "$classes"},
+        {"$group": {"_id": "$classes.value", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/recent_articles', methods=['GET'])
+def recent_articles():
+    """Returns the 10 most recently published articles."""
+    pipeline = [
+        {"$sort": {"publication_date": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_keyword/<keyword>', methods=['GET'])
+def articles_by_keyword(keyword):
+    """Returns articles containing a specific keyword."""
+    pipeline = [
+        {"$match": {"keywords": keyword}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_author/<author_name>', methods=['GET'])
+def articles_by_author(author_name):
+    """Returns all articles written by a specific author."""
+    pipeline = [
+        {"$match": {"author": author_name}},
+        {"$sort": {"publication_date": -1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/top_classes', methods=['GET'])
+def top_classes():
+    """Returns the most frequent classes in the articles."""
+    pipeline = [
+        {"$unwind": "$classes"},
+        {"$group": {"_id": "$classes.value", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/article_details/<postid>', methods=['GET'])
+def article_details(postid):
+    """Returns details of a specific article based on its postid."""
+    result = collection.find_one({"postid": postid}, {"_id": 0})
+    if result:
+        return jsonify(result)
+    else:
+        return jsonify({"error": "Article not found"}), 404
+
+@app.route('/articles_containing_video', methods=['GET'])
+def articles_containing_video():
+    """Returns a list of articles that contain a video."""
+    pipeline = [
+        {"$match": {"video_duration": {"$ne": None}}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_year/<int:year>', methods=['GET'])
+def articles_by_year(year):
+    """Returns the number of articles published in a specific year."""
+    pipeline = [
+        {"$match": {"publication_date": {"$regex": f"^{year}"}}},
+        {"$group": {"_id": None, "count": {"$sum": 1}}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/longest_articles', methods=['GET'])
+def longest_articles():
+    """Returns the top 10 articles with the highest word count."""
+    pipeline = [
+        {"$sort": {"word_count": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/shortest_articles', methods=['GET'])
+def shortest_articles():
+    """Returns the top 10 articles with the lowest word count."""
+    pipeline = [
+        {"$sort": {"word_count": 1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_keyword_count', methods=['GET'])
+def articles_by_keyword_count():
+    """Returns articles grouped by the number of keywords they contain."""
+    pipeline = [
+        {"$addFields": {"keyword_count": {"$size": "$keywords"}}},
+        {"$group": {"_id": "$keyword_count", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_with_thumbnail', methods=['GET'])
+def articles_with_thumbnail():
+    """Returns a list of articles that have a thumbnail image."""
+    pipeline = [
+        {"$match": {"thumbnail": {"$ne": None}}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_updated_after_publication', methods=['GET'])
+def articles_updated_after_publication():
+    """Returns articles where the last updated time is after the publication time."""
+    pipeline = [
+        {"$match": {"$expr": {"$gt": ["$last_updated", "$publication_date"]}}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_coverage/<coverage>', methods=['GET'])
+def articles_by_coverage(coverage):
+    """Returns a list of articles under a specific coverage category."""
+    pipeline = [
+        {"$match": {"classes.value": coverage}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/popular_keywords_last_X_days/<int:days>', methods=['GET'])
+def popular_keywords_last_x_days(days):
+    """Returns the most frequently mentioned keywords in articles published in the last X days."""
+    date_limit = datetime.datetime.now() - datetime.timedelta(days=days)
+    pipeline = [
+        {"$match": {"publication_date": {"$gte": date_limit}}},
+        {"$unwind": "$keywords"},
+        {"$group": {"_id": "$keywords", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_month/<int:year>/<int:month>', methods=['GET'])
+def articles_by_month(year, month):
+    """Returns the number of articles published in a specific month and year."""
+    date_regex = f"^{year}-{month:02d}"
+    pipeline = [
+        {"$match": {"publication_date": {"$regex": date_regex}}},
+        {"$group": {"_id": None, "count": {"$sum": 1}}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/articles_by_word_count_range/<int:min>/<int:max>', methods=['GET'])
+def articles_by_word_count_range(min, max):
+    """Returns a list of articles whose word count falls within a specified range."""
+    pipeline = [
+        {"$match": {"word_count": {"$gte": min, "$lte": max}}},
+        {"$group": {"_id": None, "count": {"$sum": 1}}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    return jsonify(result)
+
+if __name__ == '__main__':
+    app.run(debug=True)
